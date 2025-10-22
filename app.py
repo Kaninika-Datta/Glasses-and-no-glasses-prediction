@@ -1,44 +1,34 @@
 from flask import Flask, request, jsonify
-from tensorflow.keras.models import load_model
-from tensorflow.keras.preprocessing import image
-from flask_cors import CORS
+import pickle
 import numpy as np
 from PIL import Image
-import io
-import base64
 
 app = Flask(__name__)
-CORS(app)  # Allow frontend access
 
-# Load model once
-model = load_model("model.pkl")
+# Load your trained model
+with open("model.pkl", "rb") as f:
+    model = pickle.load(f)
 
-@app.route('/')
+@app.route("/")
 def home():
     return "✅ Glasses Classifier API is running!"
 
-@app.route('/predict', methods=['POST'])
+@app.route("/predict", methods=["POST"])
 def predict():
-    try:
-        data = request.get_json()
-        img_data = data.get("image")
+    # Expecting an image file from the request
+    if 'image' not in request.files:
+        return jsonify({"error": "No image uploaded"}), 400
 
-        if not img_data:
-            return jsonify({"error": "No image provided"}), 400
+    file = request.files['image']
+    img = Image.open(file).resize((224, 224))  # same size as training
+    img_array = np.expand_dims(np.array(img)/255.0, axis=0)  # normalize if needed
 
-        # Decode base64 image
-        img_bytes = base64.b64decode(img_data.split(",")[1])
-        img = Image.open(io.BytesIO(img_bytes)).resize((128, 128))
-        img_array = np.array(img) / 255.0
-        img_array = np.expand_dims(img_array, axis=0)
+    # Make prediction
+    prediction = model.predict(img_array)
+    
+    # Assuming output is categorical (0: glasses, 1: no-glasses)
+    label = "glasses" if np.argmax(prediction) == 0 else "no-glasses"
+    return jsonify({"prediction": label})
 
-        prediction = model.predict(img_array)[0][0]
-        result = "Wearing Glasses 😎" if prediction > 0.5 else "No Glasses 🙈"
-
-        return jsonify({"result": result})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=5000)
+if __name__ == "__main__":
+    app.run(debug=True)
