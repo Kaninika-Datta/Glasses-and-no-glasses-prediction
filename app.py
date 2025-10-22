@@ -11,7 +11,7 @@ app = Flask(__name__)
 CORS(app)  # Allow frontend access
 
 # Load model once
-model = load_model("glasses_classifier.h5")
+model = load_model("model.pkl")
 
 @app.route('/')
 def home():
